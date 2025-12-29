@@ -1,0 +1,18 @@
+ist（列表） vs set（集合）
+
+- list ：有序、可重复、可以用下标取第 n 个元素；支持切片取前/后 n 个。
+- set ：无序（不保证顺序）、不重复、不能用下标取“第 n 个”；强项是做并集/交集/差集很方便。
+集合 set：交集/并集/差集 设 A 、 B 都是集合：
+
+- 交集（共同元素）： A & B 或 A.intersection(B)
+- 并集（所有元素去重）： A | B 或 A.union(B)
+- 差集（在 A 不在 B）： A - B 或 A.difference(B)
+- 对称差（只在一边）： A ^ B 或 A.symmetric_difference(B)
+
+
+- 第 n 个（从 0 数）： lst[n]
+- 第 n 个（从 1 数）： lst[n-1]
+- 前 n 个： lst[:n] 等价于 lst[0:n]
+- 后 n 个： lst[-n:]
+- 去掉最后一个： lst[:-1] 
+- 最后一个元素： lst[-1]
