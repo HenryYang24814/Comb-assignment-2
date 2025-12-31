@@ -1,4 +1,5 @@
-#回溯放这里，第二题的三个bound算法放这里，第一题的bfs放这里
+
+
 import math
 inf = math.inf
 from permutation import trotter_johnson_unrank
@@ -73,32 +74,48 @@ def brute_force_tsp(graph):
     return min_weight, best_path
 
 
-def backtracking(graph, path, shortest, best_path, bounding=minout):
+def backtracking(graph, path=[0], shortest=inf, best_path=[], bounding=minout):
     """
     Recursive function to find the shortest Hamiltonian cycle.
+    bounding belongs to {minout, two_min, mst_bound}
+    path = [0] by default
     """
     size = len(graph)
-    
-    # Initialize result with a full cycle if possible
-    result = path + [path[0]] if iscycle(path, graph) else []
-    
-    # Calculate candidates (targets)
+
+    #Basis
+    if len(path) == size:
+        # Use your existing iscycle function to check the return path to city 0
+        if iscycle(path, graph):
+            # Construct the complete cycle path
+            full_path = path + [path[0]]
+            # Calculate the total weight of this cycle
+            cost = distance(full_path, graph)
+            # Update the global shortest distance and best tour found so far
+            if cost < shortest:
+                return cost, full_path
+        return shortest, best_path
+    # Calculate candidates (targets) with their bounds
     targets = []
-    for target in (set(range(size)) - set(path)):
-        if (graph[path[-1]][target]) != inf:
-            targets.append(target)
-            
-    for target in targets:
-        # Pruning based on the lower bound
-        if bounding(path + [target], graph) < shortest:
-            # Recurse: Note we pass shortest and best_path forward
+    unvisited = set(range(size)) - set(path)
+    for target in unvisited:
+        if graph[path[-1]][target] != inf:
+            # Calculate bound for the potential next step
+            bound = bounding(path + [target], graph)
+            targets += [(bound, target)]
+
+    # Can use heap here
+    targets = sorted(targets)
+
+    for (bound, target) in targets:
+        #prunching
+        if bound < shortest:
             current_shortest, tour = backtracking(graph, path + [target], shortest, best_path, bounding)
-            
-            if tour:
-                cost = distance(tour, graph)
-                if cost < shortest:
-                    shortest = cost
-                    result = tour
-                    
+
+            if tour and current_shortest < shortest:
+                shortest = current_shortest
+
+                # Update best_path for this scope
+                best_path = tour
+
     # Return both the cost and the path to match your test.py expectation
-    return shortest, result
+    return shortest, best_path

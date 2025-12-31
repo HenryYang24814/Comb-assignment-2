@@ -1,4 +1,4 @@
-#第一题生成全排列的算法
+
 # permutation.py
 
 def trotter_johnson_unrank(n: int, r: int) -> list:
