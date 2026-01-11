@@ -126,7 +126,7 @@ def backtracking(graph, path=[0], shortest=inf, best_path=[], bounding=minout):
 
 # ... 保留原有的 distance, iscycle, minout 等函数 ...
 
-def backtracking2(graph, path=[0], shortest=inf, best_path=[], bounding=minout, start_time=None, time_limit=None):
+def backtracking2(graph, path=[0], shortest=inf, best_path=[], bounding=minout, start_time=None, time_limit=None, history=None):
     """
     带有早停（时间限制）功能的递归回溯算法。
     """
@@ -167,13 +167,17 @@ def backtracking2(graph, path=[0], shortest=inf, best_path=[], bounding=minout, 
             # 递归调用时透传 start_time 和 time_limit
             current_shortest, tour = backtracking2(
                 graph, path + [target], shortest, best_path, bounding, 
-                start_time=start_time, time_limit=time_limit
+                start_time=start_time, time_limit=time_limit, history=history
             )
 
             if tour and current_shortest < shortest:
                 shortest = current_shortest
                 best_path = tour
                 
+                # Record history if a better solution is found
+                if history is not None:
+                    history.append((time.time() - start_time, shortest))
+
             # 递归返回后再次检查时间，以便在超时时快速跳出循环
             if time_limit is not None and (time.time() - start_time > time_limit):
                 return shortest, best_path

@@ -1,100 +1,122 @@
 import time
+import sys
+import matplotlib.pyplot as plt
 import tsp
-from tsp_app import tsp_app, calculate_tour_weight
-from graph_reader import read_graph  # [重要] 导入你项目中的读取函数
+from tsp import minout
+from graph_reader import read_graph
 
-# --- 核心分析逻辑 ---
-def run_comparison_analysis():
+# --- 1. 硬编码基准数据 (避免重复耗时计算) ---
+# 格式: { N: (Exact_Time_Seconds, Optimal_Cost) }
+BASELINE_DATA = {
+    12: (2.884, 289),
+    13: (39.94, 334),
+    14: (182.32, 344),
+    15: (347.0, 295),
+}
+
+def run_analysis_with_plot():
+    # 默认 k=0.37，也可以通过命令行 python analysis.py 0.5 传入
+    if len(sys.argv) > 1:
+        try:
+            target_k = float(sys.argv[1])
+        except ValueError:
+            target_k = 0.37
+    else:
+        target_k = 0.37
+
     filename = "completegraph.txt"
-    
     print(f"Reading graphs from {filename}...")
-    try:
-        # 使用你现有的 graph_reader 读取文件
-        # read_graph 返回的是一个列表: [(n, graph), (n, graph), ...]
-        graphs = read_graph(filename)
-    except Exception as e:
-        print(f"Error reading file: {e}")
-        return
-
+    graphs = read_graph(filename)
+    
     if not graphs:
-        print("No graphs found in the file.")
+        print("No graphs found.")
         return
 
-    # 存储 k=0 到 k=1 的误差数据，用于后续拟合分析
-    k_error_data = [] 
+    # 用于绘图的数据存储
+    # 结构: { n: {'k_values': [], 'errors': []} }
+    plot_data = {}
 
-    print(f"\n{'='*20} TSP Algorithm Comparison (B&B Early Stop vs MST Approx) {'='*20}")
-    print(f"{'ID':<4} | {'N':<4} | {'Method':<25} | {'Cost':<10} | {'Error %':<10} | {'Time (s)':<10} | {'Time Ratio':<10}")
-    print("-" * 90)
+    print(f"\n{'='*30} Truncated B&B Analysis (Max N=15) {'='*30}")
+    print(f"Target k (red line) = {target_k}")
+    print(f"{'N':<4} | {'k':<5} | {'Limit(s)':<10} | {'Cost':<8} | {'Opt Cost':<8} | {'Error %':<10} | {'Status'}")
+    print("-" * 85)
 
-    # 遍历文件中的每一张图
-    for idx, (n, graph) in enumerate(graphs):
-        # --- A. 运行精确解 (Exact B&B) 获取基准 ---
-        # 这一步是为了拿到 T_optimal (x) 和 Optimal Cost
-        start = time.time()
-        # 注意：如果你已经添加了 backtracking2，这里可以用 tsp.backtracking2
-        # 如果还在用原来的，就用 tsp.backtracking
-        opt_cost, opt_path = tsp.backtracking(graph, bounding=tsp.minout)
-        exact_time = time.time() - start
-        
-        # --- B. 运行 MST 近似算法 ---
-        start_app = time.time()
-        app_order = tsp_app(graph, n)
-        app_cost = calculate_tour_weight(graph, app_order)
-        app_time = time.time() - start_app
-        
-        # --- C. 模拟 B&B 截断 (t = 0.37 * exact_time) ---
-        # 设定时间限制为精确时间的 37%
-        limit_37 = 0.37 * exact_time
-        start_bnb_37 = time.time()
-        
-        # [关键] 这里调用带 time_limit 的 backtracking
-        # 请确保你的 tsp.py 里 backtracking 函数已经增加了 time_limit 参数
-        bnb_37_cost, _ = tsp.backtracking2(graph, bounding=tsp.minout, time_limit=limit_37)
-        bnb_37_time = time.time() - start_bnb_37
-        
-        # --- 计算误差 ---
-        mst_error = (app_cost - opt_cost) / opt_cost * 100
-        bnb_37_error = (bnb_37_cost - opt_cost) / opt_cost * 100
-        
-        # --- 打印该图的分析结果 ---
-        # 1. Exact
-        print(f"{idx+1:<4} | {n:<4} | {'Exact B&B (Baseline)':<25} | {opt_cost:<10.1f} | {'0.00%':<10} | {exact_time:<10.4f} | {'1.00':<10}")
-        # 2. MST Approx
-        print(f"{'':<4} | {'':<4} | {'MST Approx':<25} | {app_cost:<10.1f} | {mst_error:<10.2f}%    | {app_time:<10.4f} | {app_time/exact_time:<10.4f}")
-        # 3. B&B 0.37x
-        print(f"{'':<4} | {'':<4} | {'B&B (Limit t=0.37x)':<25} | {bnb_37_cost:<10.1f} | {bnb_37_error:<10.2f}%    | {bnb_37_time:<10.4f} | {bnb_37_time/exact_time:<10.4f}")
-        print("-" * 90)
+    # 定义我们要测试的一系列 k 值 (用于画曲线)
+    # 我们会把用户输入的 target_k 也加入进去一起算
+    test_k_values = sorted(list(set([0.05, 0.1, 0.2, 0.3, 0.37, 0.5, 0.75, 1.0, target_k])))
 
-        # --- D. 收集 k=0.1, 0.2 ... 1.0 的数据 (用于验证表达式) ---
-        # 针对当前这张图，测试不同比例的时间限制 k
-        for k in [0.1, 0.2, 0.37, 0.5, 0.8]:
-            limit_k = k * exact_time
-            # 同样调用带 time_limit 的函数
-            cost_k, _ = tsp.backtracking2(graph, bounding=tsp.minout, time_limit=limit_k)
-            err_k = (cost_k - opt_cost) / opt_cost * 100
-            k_error_data.append({'n': n, 'k': k, 'error': err_k})
+    for n, graph in graphs:
+        # 1. 过滤：只处理 N=12 到 15 的图
+        if n not in BASELINE_DATA:
+            continue
+        
+        # 初始化该 N 的绘图数据
+        plot_data[n] = {'k_values': [], 'errors': []}
+        
+        # 获取基准数据
+        exact_time, opt_cost = BASELINE_DATA[n]
 
-    # --- 统计与公式拟合 ---
-    if k_error_data:
-        print("\n[Data Analysis] Error vs Time Fraction (k)")
-        print("Based on all graphs in file, average Error for each k:")
-        
-        k_groups = {}
-        for item in k_error_data:
-            k = item['k']
-            if k not in k_groups: k_groups[k] = []
-            k_groups[k].append(item['error'])
-        
-        print(f"{'k (t/x)':<10} | {'Avg Error %':<15}")
-        print("-" * 30)
-        for k in sorted(k_groups.keys()):
-            avg_err = sum(k_groups[k]) / len(k_groups[k])
-            print(f"{k:<10.2f} | {avg_err:<15.2f}")
-        
-        print("\n[Conclusion]")
-        print("1. MST Approx is extremely fast but has high error (usually >15%).")
-        print("2. B&B with Early Stopping (t=0.37x) drastically reduces error to near 0%.")
+        # 2. 遍历不同的 k 值进行测试
+        for k in test_k_values:
+            time_limit = k * exact_time
+            
+            # 调用 tsp.py 中的 backtracking2 (带时间限制)
+            # 注意：这里我们只关心 cost，不需要 tour
+            start_run = time.time()
+            res_cost, _ = tsp.backtracking2(
+                graph, 
+                bounding=minout, 
+                time_limit=time_limit
+            )
+            actual_run_time = time.time() - start_run
+
+            # 3. 计算误差
+            if res_cost == float('inf'):
+                error = 100.0 # 没找到解
+                status = "No Path"
+            else:
+                error = (res_cost - opt_cost) / opt_cost * 100
+                status = "OK"
+
+            # 存入绘图数据
+            plot_data[n]['k_values'].append(k)
+            plot_data[n]['errors'].append(error)
+
+            # 仅打印用户指定的 target_k 的详细日志，避免刷屏，或者打印所有也行
+            # 这里选择打印 target_k 的结果以供表格展示
+            if k == target_k:
+                 print(f"{n:<4} | {k:<5.2f} | {time_limit:<10.4f} | {res_cost:<8.1f} | {opt_cost:<8.1f} | {error:<9.2f}% | {status}")
+
+    # --- 4. 绘图逻辑 ---
+    print("\nGenerating plot...")
+    plt.figure(figsize=(10, 6))
+    
+    # 定义不同 N 的颜色，区分度高一点
+    colors = {12: 'blue', 13: 'orange', 14: 'green', 15: 'purple'}
+    
+    for n, data in plot_data.items():
+        plt.plot(
+            data['k_values'], 
+            data['errors'], 
+            marker='o', 
+            label=f'N={n} (Opt Time={BASELINE_DATA[n][0]}s)',
+            color=colors.get(n, 'black')
+        )
+
+    # 画红色虚线 (User Target k)
+    plt.axvline(x=target_k, color='red', linestyle='--', linewidth=2, label=f'Chosen k={target_k}')
+
+    plt.title(f'TSP Error Rate vs Time Limit Fraction (k)\n(Baseline: Exact B&B using minout)')
+    plt.xlabel('k (Time Fraction: t = k * ExactTime)')
+    plt.ylabel('Error Relative to Optimal (%)')
+    plt.grid(True, which='both', linestyle='--', alpha=0.7)
+    plt.legend()
+    plt.ylim(bottom=-1) # Y轴从-1开始，稍微留点空隙
+    
+    # 保存图片并显示
+    plt.savefig('tsp_k_analysis.png')
+    print("Plot saved as 'tsp_k_analysis.png'")
+    plt.show()
 
 if __name__ == "__main__":
-    run_comparison_analysis()
+    run_analysis_with_plot()
