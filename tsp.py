@@ -2,6 +2,7 @@ import math
 inf = math.inf
 from permutation import trotter_johnson_unrank
 from graph import MST, DFS
+import time
 
 def distance(path, graph):
     """Return the total distance of the given path."""
@@ -121,6 +122,63 @@ def backtracking(graph, path=[0], shortest=inf, best_path=[], bounding=minout):
 
     return shortest, best_path
 
+
+
+# ... 保留原有的 distance, iscycle, minout 等函数 ...
+
+def backtracking2(graph, path=[0], shortest=inf, best_path=[], bounding=minout, start_time=None, time_limit=None):
+    """
+    带有早停（时间限制）功能的递归回溯算法。
+    """
+    # 1. 如果是根节点首次调用，初始化开始时间
+    if start_time is None:
+        start_time = time.time()
+    
+    # 2. 检查是否超过了设定的时间限制
+    if time_limit is not None:
+        if time.time() - start_time > time_limit:
+            return shortest, best_path
+
+    size = len(graph)
+
+    # 递归终止条件
+    if len(path) == size:
+        if iscycle(path, graph):
+            full_path = path + [path[0]]
+            cost = distance(full_path, graph)
+            if cost < shortest:
+                return cost, full_path
+        return shortest, best_path
+    
+    # 计算候选节点及其下界
+    targets = []
+    unvisited = set(range(size)) - set(path)
+    for target in unvisited:
+        if graph[path[-1]][target] != inf:
+            bound = bounding(path + [target], graph)
+            targets += [(bound, target)]
+
+    # 启发式排序：优先探索下界更小的分支
+    targets = sorted(targets)
+
+    for (bound, target) in targets:
+        # 剪枝：仅当当前路径下界小于已知最短路径时才继续探索
+        if bound < shortest:
+            # 递归调用时透传 start_time 和 time_limit
+            current_shortest, tour = backtracking2(
+                graph, path + [target], shortest, best_path, bounding, 
+                start_time=start_time, time_limit=time_limit
+            )
+
+            if tour and current_shortest < shortest:
+                shortest = current_shortest
+                best_path = tour
+                
+            # 递归返回后再次检查时间，以便在超时时快速跳出循环
+            if time_limit is not None and (time.time() - start_time > time_limit):
+                return shortest, best_path
+
+    return shortest, best_path
 
 def tsp_approximation(graph, n):
     """
